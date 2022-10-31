@@ -2,44 +2,55 @@
 using Binance.Net.Objects.Models.Spot.Socket;
 using CryptoExchange.Net.Sockets;
 using Microsoft.VisualBasic;
+using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 
 
 namespace BinanceBot
 {
-    class Listener
+    class Listener 
     {
+     
         private string _lastDate = "";
         private decimal _lastPrice = 0;
-        const int StringShorter = 5;
         private string _lastPath = "";
-        private void Handle(DataEvent<BinanceStreamBookPrice> update)
+        private string _symbol = "";
+        private int _precision = 0;
+
+        public Listener(string symbol, int precision)
+        {
+            _symbol = symbol;
+            _precision = precision;
+        }
+
+        private void Handle(DataEvent<BinanceStreamBookPrice> update, string symbol, int precision)
         {
 
             string dataNow = DateTime.UtcNow.ToString("dd-M-yyyy-HH");
-            string dataFolder = "results//" + dataNow;
+            string dataFolder = "results//" + dataNow + " "+ symbol;
             string resultPath = $"{dataFolder}//{dataNow}.txt";
             decimal currentPrice = GetCurrentPrice(update);
             string currentDate = DateTime.UtcNow.ToString("dd-M-yyyy-HH-mm-ss");
             if (string.IsNullOrEmpty(_lastPath))
             {
-                _lastPath = resultPath; 
+                _lastPath = resultPath;
             }
             if (_lastPath != resultPath)
             {
                 var archivator = new Archivator();
                 archivator.FilesToZip(_lastPath, _lastPath);
+                File.Delete(_lastPath);
                 _lastPath = resultPath;
             }
             if (!Directory.Exists(dataFolder))
             {
                 Directory.CreateDirectory(dataFolder);
             }
-
             GetData(currentDate, currentPrice, resultPath, update);
-
         }
 
 
@@ -47,7 +58,7 @@ namespace BinanceBot
         {
             if ((currentDate != _lastDate) || (currentPrice != _lastPrice))
             {
-                string dataString = GetOnceData(update, currentDate, _lastDate).Remove((GetOnceData(update, currentDate, _lastDate).Length - StringShorter)) + "\n";
+                string dataString = GetOnceData(update, currentDate, _lastDate).Remove((GetOnceData(update, currentDate, _lastDate).Length - _precision)) + "\n";
 
                 File.AppendAllText(resultPath, dataString);
                 _lastDate = currentDate;
@@ -83,25 +94,22 @@ namespace BinanceBot
         }
 
 
-        public async Task StartRecieving()
+
+        public async Task StartRecieving(string symbol, int precision)
         {
-            string symbol = "BTCUSDT";
-            int precision = 0;
             var client = new BinanceSocketClient();
 
             var response = await client
                 .SpotStreams
-                .SubscribeToBookTickerUpdatesAsync(symbol, (update) => Handle(update));
+                .SubscribeToBookTickerUpdatesAsync(symbol,(update) => Handle(update, symbol, precision));
 
             if (!response.Success)
             {
                 Console.WriteLine($"could not request: {response.Error?.Message}");
 
             }
-            while (true)
-            {
+             
 
-            }
         }
 
     }
